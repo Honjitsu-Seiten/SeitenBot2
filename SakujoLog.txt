@@ -1,0 +1,4 @@
+'''Wikipedia:削除依頼/ログ/{year}年{month}月{day}日'''
+== {month}月{day}日 ==
+<noinclude>{{{{purge}}}} - </noinclude>{{{{削除依頼/ログ日付|date={year}-{month:02}-{day:02}}}}} {{{{削除依頼/ログ作成}}}}
+<!-- 新規の依頼は一番下につけたしてください。 -->
