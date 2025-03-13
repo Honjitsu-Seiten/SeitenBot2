@@ -2,4 +2,7 @@
 
 Wikimedia bot that performs scheduled tasks
 
-https://ja.wikipedia.org/wiki/User:SeitenBot2
+Those scripts require [pywikibot](https://github.com/wikimedia/pywikibot). Plus, some scripts also reqire [mwparserfromhell](https://github.com/earwig/mwparserfromhell).
+
+
+Bot account: https://ja.wikipedia.org/wiki/User:SeitenBot2
