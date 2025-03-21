@@ -262,7 +262,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
 
         # ローカルのファイルを削除しても読み込みのリンク切れが生じないか確認
         if self.current_page.title(with_ns=False) != self.commons_page.title(with_ns=False):
-            it = iter(self.current_page.usingPages())
+            it = iter(self.current_page.using_pages())
             try:
                 if next(it) == self.current_page:
                     next(it)
