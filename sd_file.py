@@ -31,6 +31,7 @@ from pywikibot.exceptions import Error
 from pywikibot.pagegenerators import GeneratorFactory, PetScanPageGenerator
 from pywikibot.data import api
 from pywikibot.bot import SingleSiteBot, CurrentPageBot
+from pywikibot.tools.chars import url2string
 
 import mwparserfromhell
 from mwparserfromhell.nodes.template import Template
@@ -227,7 +228,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
         if len(importlogs) > 0:
             importlog = importlogs[0]
             if m := re.match(self.import_log_pattern, importlog.comment()):
-                importfrom = pywikibot.url2unicode(m.group(1)).replace('_', ' ')
+                importfrom = url2string(m.group(1)).replace('_', ' ')
                 if importfrom != self.current_page.title(with_ns=True):
                     # インポート元が現在のローカルのファイル名と異なる
                     self._skip_delete('IncorrectCommonsFileName')
@@ -245,7 +246,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
             # インポートログがなければ編集履歴を新しい順に走査し、インポート時に自動記入される要約欄を探す
             for revision in iter(self.commons_page.revisions(reverse=False, content=False)):
                 if m := re.match(self.import_log_pattern, revision.comment):
-                    importfrom = pywikibot.url2unicode(m.group(1)).replace('_', ' ')
+                    importfrom = url2string(m.group(1)).replace('_', ' ')
                     if importfrom == self.current_page.title(with_ns=True):
                         self.import_log_timestamp = revision.timestamp
                         break
