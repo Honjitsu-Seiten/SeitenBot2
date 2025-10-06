@@ -122,7 +122,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
             match = re.match(r'\| *{{P\|ファイル\|([^}]+?)}}', table2_lines[i])
             if not match:
                 continue
-            file = pywikibot.FilePage(source=self.site, title=match.group(1))
+            file = pywikibot.FilePage(source=self.site, title=match.group(1), ignore_extension=True)
             if file in already_deleted_files:
                 remove_line_indexs.append(i)
             else:
@@ -138,19 +138,21 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
         legen.set_namespace(6)
         if end is not None:
             legen.request['leend'] = end
-        return { pywikibot.FilePage(source=self.site, title=logentry['title']) for logentry in legen if logentry['pageid'] == 0 }
+        return { pywikibot.FilePage(source=self.site, title=logentry['title'], ignore_extension=True) for logentry in legen if logentry['pageid'] == 0 }
 
     def init_page(self, item):
         self.description = ''
-        assert int(item.namespace()) == 6, 'int(item.namespace()) == 6'
-        return pywikibot.FilePage(source=item)
+        return pywikibot.FilePage(source=item, ignore_extension=True)
 
     def skip_page(self, page):
+        if int(item.namespace()) != 6:
+            return True
         if not self.ignorelist and page in self.ignore_files:
             return True
         return super().skip_page(page)
 
     def treat_page(self):
+        
         for category in self.current_page.categories():
             if category.title(with_ns=False) in self.except_categories:
                 self._skip_delete('InvalidCategory')
@@ -181,7 +183,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
                         break
                 except ValueError:
                     pass
-        self.commons_page = pywikibot.FilePage(self.commons_site, title=commons_file_name)
+        self.commons_page = pywikibot.FilePage(self.commons_site, title=commons_file_name, ignore_extension=True)
         pywikibot.output('テンプレートで指定されたコモンズのファイル名: ', newline=False)
         pywikibot.output(self.commons_page.title(with_ns=False))
         self._check()
@@ -206,7 +208,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
                 break
             try:
                 movelog = next(iter(self.commons_site.logevents(logtype='move', page=self.commons_page, total=1)))
-                self.commons_page = pywikibot.FilePage(source=movelog.target_page())
+                self.commons_page = pywikibot.FilePage(source=movelog.target_page(), ignore_extension=True)
             except StopIteration:
                 self._skip_delete('CommonsFileNotExists')
                 return
