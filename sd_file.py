@@ -145,7 +145,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
         return pywikibot.FilePage(source=item, ignore_extension=True)
 
     def skip_page(self, page):
-        if int(item.namespace()) != 6:
+        if int(page.namespace()) != 6:
             return True
         if not self.ignorelist and page in self.ignore_files:
             return True
