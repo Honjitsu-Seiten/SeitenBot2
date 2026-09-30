@@ -25,11 +25,13 @@
 
 import re
 from contextlib import suppress
-import pywikibot
-from pywikibot.pagegenerators import GeneratorFactory
-from pywikibot.bot import SingleSiteBot, CurrentPageBot
-from pywikibot.exceptions import Error
+from typing import ClassVar
+
 import mwparserfromhell
+import pywikibot
+from pywikibot.bot import CurrentPageBot, SingleSiteBot
+from pywikibot.exceptions import Error
+from pywikibot.pagegenerators import GeneratorFactory
 
 
 def levelnum(level):
@@ -37,12 +39,12 @@ def levelnum(level):
 
 
 class RemovePpBot2(SingleSiteBot, CurrentPageBot):
-    update_options = {"summary": "Botによる: 保護テンプレートの除去"}
+    update_options: ClassVar = {"summary": "Botによる: 保護テンプレートの除去"}
 
-    pattern1 = re.compile(r"<noinclude></noinclude>")
-    pattern2 = re.compile(r"/\*[ 　\t]*\*/\n?")
+    cleanup_wikitext = re.compile(r"<noinclude></noinclude>")
+    cleanup_css = re.compile(r"/\*[ 　\t]*\*/\n?")
 
-    pptemplates = {
+    pptemplates: ClassVar = {
         "Pp": "edit",
         "Pp-move": "move",
         "Pp-upload": "upload",
@@ -74,7 +76,7 @@ class RemovePpBot2(SingleSiteBot, CurrentPageBot):
         self.pptemplates.update(pptemplates_redirect)
 
     def skip_page(self, page):
-        if page.namespace() in ("利用者:", "Mediawiki:", "モジュール:"):
+        if page.namespace() in ("利用者:", "Mediawiki:"):
             return True
         if page.title() in (
             "Wikipedia:サンドボックス",
@@ -84,13 +86,13 @@ class RemovePpBot2(SingleSiteBot, CurrentPageBot):
             "Template:X2",
         ):
             return True
+        if page.content_model not in ("wikitext", "sanitized-css"):
+            return True
         return super().skip_page(page)
 
     def treat_page(self):
         """Treat page."""
         page = self.current_page
-        title = page.title()
-        ns = page.namespace()
         try:
             pagetext = page.get(get_redirect=True)
             protection = page.protection()
@@ -138,14 +140,14 @@ class RemovePpBot2(SingleSiteBot, CurrentPageBot):
         new_text = str(wikicode)
 
         if removed:
-            if (ns == "Template:") and title.endswith(".css"):
-                new_text = self.pattern2.sub("", new_text)
+            if page.content_model == "sanitized-css":
+                new_text = self.cleanup_css.sub("", new_text)
             else:
-                new_text = self.pattern1.sub("", new_text)
+                new_text = self.cleanup_wikitext.sub("", new_text)
             self.put_current(
                 new_text=new_text,
                 summary=self.opt.summary,
-                show_diff=not self.opt.always,
+                show_diff=True,
                 ignore_save_related_errors=True,
             )
         else:
@@ -163,7 +165,7 @@ def main(*args):
         site.login()
 
     for arg in local_args:
-        arg, _, value = arg.partition(":")
+        arg, _, _value = arg.partition(":")
         option = arg[1:]
         options[option] = True
 
