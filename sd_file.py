@@ -28,17 +28,16 @@ import re
 import time
 from collections import defaultdict
 
-import pywikibot
-from pywikibot.exceptions import Error
-from pywikibot.pagegenerators import GeneratorFactory, PetScanPageGenerator
-from pywikibot.data import api
-from pywikibot.bot import SingleSiteBot, CurrentPageBot
-from pywikibot.tools.chars import url2string
-
 import mwparserfromhell
+import pywikibot
 from mwparserfromhell.nodes.template import Template
 from mwparserfromhell.nodes.wikilink import Wikilink
 from mwparserfromhell.wikicode import Wikicode
+from pywikibot.bot import CurrentPageBot, SingleSiteBot
+from pywikibot.data import api
+from pywikibot.exceptions import Error
+from pywikibot.pagegenerators import GeneratorFactory, PetScanPageGenerator
+from pywikibot.tools.chars import url2string
 
 skip_listpage = "利用者:SeitenBot2/即時削除を見送ったファイル"
 
@@ -226,15 +225,11 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
             ):
                 self._put_template()
             return
-        pywikibot.output(
-            "「{}」を削除します".format(self.current_page.title(with_ns=True))
-        )
-        reason = "Bot: [[WP:CSD#ファイル1-5]] [[c:{}]]へ移行".format(
-            self.commons_page.title(with_ns=True)
-        )
+        pywikibot.output(f"「{self.current_page.title(with_ns=True)}」を削除します")
+        delete_summary = f"Bot: [[WP:CSD#ファイル1-5]] [[c:{self.commons_page.title(with_ns=True)}]]へ移行"
         time.sleep(1)
         self.current_page.delete(
-            reason=reason, prompt=not self.opt.always, automatic_quit=True
+            summary=delete_summary, prompt=not self.opt.always, automatic_quit=True
         )
 
     def _check(self):
@@ -376,7 +371,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
             elif revision.user not in ("MGA73", "MGA73bot"):
                 # コモンズの移入日時より後であれば、明らかにコモンズへ反映させる必要のない編集のみであるかを確認する
                 # ただし特定の利用者による編集は無視する
-                pywikibot.output("{0.timestamp} {0.user}".format(revision))
+                pywikibot.output(f"{revision.timestamp} {revision.user}")
                 pywikibot.showDiff(prevtext, curtext)
 
                 # カテゴリや特定のテンプレートといったものを除去してから比較する
@@ -454,7 +449,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
         else:
             output_text = "== {{Original upload log}} ==\n" + output_text
         if categories := code.filter_wikilinks(
-            matches=r"\[\[Category:.+?\]\]", flags=re.I
+            matches=r"\[\[Category:.+?\]\]", flags=re.IGNORECASE
         ):
             commons_code.insert_before(categories[0], output_text)
         else:
@@ -488,14 +483,14 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
                     if template.has("Description")
                     else ""
                 )
-                output.append("| description = <nowiki>{}</nowiki>".format(description))
+                output.append(f"| description = <nowiki>{description}</nowiki>")
                 break
         else:
             for wikilink in wikicode.filter_wikilinks():
                 if wikilink.title.lower().startswith(("category:", "カテゴリ:")):
                     wikicode.remove(wikilink)
             description = re.sub(r"\n+", " ", str(wikicode)).strip()
-            output.append("| description = <nowiki>{}</nowiki>".format(description))
+            output.append(f"| description = <nowiki>{description}</nowiki>")
         output.append(
             "| file_history = {{Moved from Japanese Wikipedia/FileHistory\n | timezone = UTC"
         )
@@ -534,7 +529,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
             )
             output.append(comment_format.format(i, comment))
             if revision.minor:
-                output.append(" | flag{} = m".format(i))
+                output.append(f" | flag{i} = m")
             i += 1
         output.append("}}\n| other_information = \n}}\n")
         return "\n".join(output)
@@ -584,7 +579,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
                 newtable2.write("| | ")
             newtable2.write("| ")
             reasons = sorted([self.skipped_reason[r] for r in value[0]])
-            newtable2.write(", ".join("[[#{0}|{0}]]".format(x) for x in reasons))
+            newtable2.write(", ".join(f"[[#{x}|{x}]]" for x in reasons))
             newtable2.write("\n")
         newtable2.write("}}")
         self.listpage_code.replace(table2, newtable2.getvalue(), recursive=False)
