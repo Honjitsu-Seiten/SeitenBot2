@@ -26,7 +26,8 @@
 import collections
 import io
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 import pywikibot
 
 weekday_ja = ("月", "火", "水", "木", "金", "土", "日")
@@ -34,9 +35,10 @@ wait = 3
 
 
 def iso8601toja(timestamp):
-    return "{}年{}月{}日 ({})".format(
-        timestamp.year, timestamp.month, timestamp.day, weekday_ja[timestamp.weekday()]
-    ) + timestamp.strftime(" %H:%M (UTC)")
+    return (
+        f"{timestamp.year}年{timestamp.month}月{timestamp.day}日 ({weekday_ja[timestamp.weekday()]})"
+        + timestamp.strftime(" %H:%M (UTC)")
+    )
 
 
 def main(*args):
@@ -51,13 +53,13 @@ def main(*args):
     show_diff = False
 
     for arg in pywikibot.handle_args(args):
-        arg, _, value = arg.partition(":")
+        arg, _, _value = arg.partition(":")
         option = arg.partition("-")[2]
         # bot options
         if option in ("showdiff",):
             show_diff = True
         else:
-            pywikibot.output("Disregarding unknown argument %s." % arg)
+            pywikibot.output(f"Disregarding unknown argument {arg}.")
 
     site = pywikibot.Site(code="ja", fam="wikipedia")
     if not site.logged_in():
@@ -66,14 +68,14 @@ def main(*args):
     botreq_title = "Wikipedia:Bot作業依頼"
     botreq = pywikibot.Page(site, botreq_title)
     if not botreq.exists():
-        pywikibot.error("{} doesn't exist.".format(botreq_title))
+        pywikibot.error(f"{botreq_title} doesn't exist.")
         return False
     botreq_text_list = re.split(r"(==[^=].+?==\n)", botreq.text)
     it = iter(botreq_text_list)
     try:
         next(it)
     except StopIteration:
-        pywikibot.output("There is no request in {}".format(botreq_title))
+        pywikibot.output(f"There is no request in {botreq_title}")
         return True
     closed_pattern = re.compile(
         r"\{\{\s*(?:(?:解決)?済み|失効)\s*\|.*?(\d{4})年(\d{1,2})月(\d{1,2})日 \([月火水木金土日]\) (\d{2}):(\d{2}) \(UTC\)\s*\}\}"
@@ -85,10 +87,8 @@ def main(*args):
             section_content = next(it)
             match = closed_pattern.search(section_content)
             if match:
-                closed_datetime = datetime(
-                    *map(int, match.groups()), tzinfo=timezone.utc
-                )
-                now = datetime.now(timezone.utc)
+                closed_datetime = datetime(*map(int, match.groups()), tzinfo=UTC)
+                now = datetime.now(UTC)
                 if (now - closed_datetime) > timedelta(days=wait):
                     sendlog_dict[match.group(1, 2)].append(
                         (section_title, section_content)
@@ -120,21 +120,14 @@ def main(*args):
         oldtext = botreq.text
         botreq.text = "".join(botreq_text_list)
 
-        summary2 = "Botによる: [[特別:固定リンク/{}|Wikipedia:Bot作業依頼の{}時点の版]]から{}節転記".format(
-            botreq.latest_revision_id,
-            iso8601toja(botreq.editTime()),
-            len(li),
-        )
+        summary2 = f"Botによる: [[特別:固定リンク/{botreq.latest_revision_id}|Wikipedia:Bot作業依頼の{iso8601toja(botreq.latest_revision.timestamp)}時点の版]]から{len(li)}節転記"
         if newpage:
             summary2 += " +{{Archives}}"
         if show_diff:
             pywikibot.showDiff(logpageoldtext, logpage.text)
         logpage.save(summary=summary2, minor=False)
 
-        summary1 = "Botによる: [[{}]]へ{}節転記".format(
-            log_title,
-            len(li),
-        )
+        summary1 = f"Botによる: [[{log_title}]]へ{len(li)}節転記"
         if show_diff:
             pywikibot.showDiff(oldtext, botreq.text)
         botreq.save(summary=summary1, minor=False)
