@@ -173,7 +173,7 @@ def main(*args):
         bot = RemovePpBot2(generator=generator, site=site, **options)
         bot.run()
     else:
-        pywikibot.showHelp()
+        pywikibot.show_help()
 
 
 if __name__ == "__main__":
