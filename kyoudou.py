@@ -162,7 +162,7 @@ def oldrequest(site, wait, show_diff):
     summary2 = "Botによる: [[特別:固定リンク/{}|{}の{}時点の版]]から{}節転記".format(
         kyoudou.latest_revision_id,
         kyoudou_title,
-        iso8601toja(kyoudou.editTime()),
+        iso8601toja(kyoudou.latest_revision.timestamp),
         old_request_count,
     )
     if show_diff:
