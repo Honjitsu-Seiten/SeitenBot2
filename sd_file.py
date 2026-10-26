@@ -468,9 +468,9 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
         infos = [file_histories[k] for k in sorted(file_histories.keys())]
         revisions = tuple(self.current_page.revisions(reverse=True))
         if len(infos) > 9:
-            raise pywikibot.Error("元のファイルの版数が多すぎます")
+            pywikibot.warning(f"{self.current_page}のファイルの版数が多すぎます")
         if len(revisions) > 19:
-            raise pywikibot.Error("元の編集履歴が多すぎます")
+            pywikibot.warning(f"{self.current_page}の編集履歴が多すぎます")
         output = ["{{Moved from Japanese Wikipedia"]
         output.append("| filename = " + self.current_page.title(with_ns=False))
         wikicode = mwparserfromhell.parse(self.description)
