@@ -39,8 +39,6 @@ def levelnum(level):
 
 
 class RemovePpBot2(SingleSiteBot, CurrentPageBot):
-    update_options: ClassVar = {"summary": "Botによる: 保護テンプレートの除去"}
-
     cleanup_wikitext = re.compile(r"<noinclude></noinclude>")
     cleanup_css = re.compile(r"/\*[ 　\t]*\*/\n?")
 
@@ -146,7 +144,7 @@ class RemovePpBot2(SingleSiteBot, CurrentPageBot):
                 new_text = self.cleanup_wikitext.sub("", new_text)
             self.put_current(
                 new_text=new_text,
-                summary=self.opt.summary,
+                summary="Botによる: 保護テンプレートの除去",
                 show_diff=True,
                 ignore_save_related_errors=True,
             )
@@ -175,7 +173,7 @@ def main(*args):
         bot = RemovePpBot2(generator=generator, site=site, **options)
         bot.run()
     else:
-        pywikibot.showHelp()
+        pywikibot.show_help()
 
 
 if __name__ == "__main__":

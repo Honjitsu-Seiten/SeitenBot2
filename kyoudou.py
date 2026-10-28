@@ -25,18 +25,19 @@
 
 import collections
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-import pywikibot
 import mwparserfromhell
+import pywikibot
 
 weekday_ja = ("月", "火", "水", "木", "金", "土", "日")
 
 
 def iso8601toja(timestamp):
-    return "{}年{}月{}日 ({})".format(
-        timestamp.year, timestamp.month, timestamp.day, weekday_ja[timestamp.weekday()]
-    ) + timestamp.strftime(" %H:%M (UTC)")
+    return (
+        f"{timestamp.year}年{timestamp.month}月{timestamp.day}日 ({weekday_ja[timestamp.weekday()]})"
+        + timestamp.strftime(" %H:%M (UTC)")
+    )
 
 
 def main(*args):
@@ -75,22 +76,20 @@ def finishedlist(site, wait, show_diff):
     finished_title = "Template:共同翻訳完了項目"
     finishedpage = pywikibot.Page(site, finished_title)
     if not finishedpage.exists():
-        pywikibot.error("{} doesn't exist.".format(finished_title))
+        pywikibot.error(f"{finished_title} doesn't exist.")
         return
     finishedpage_oldtext = finishedpage.text
     lines = finishedpage.text.splitlines(keepends=True)
     newlines = lines.copy()
     for line in lines:
         if match := re.match(r"\* ?\[\[(\d{1,2})月(\d{1,2})日\]\]", line):
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             year = now.year
             month = int(match.group(1))
             day = int(match.group(2))
             if now.month < month:
                 year -= 1
-            finished_datetime = datetime(
-                year=year, month=month, day=day, tzinfo=timezone.utc
-            )
+            finished_datetime = datetime(year=year, month=month, day=day, tzinfo=UTC)
             if (now - finished_datetime) > timedelta(days=wait + 1):
                 newlines.remove(line)
     finishedpage.text = "".join(newlines)
@@ -109,12 +108,12 @@ def oldrequest(site, wait, show_diff):
     # 古い依頼を探す
     kyoudou = pywikibot.Page(site, kyoudou_title)
     if not kyoudou.exists():
-        pywikibot.error("{} doesn't exist.".format(kyoudou_title))
+        pywikibot.error(f"{kyoudou_title} doesn't exist.")
         return
     kyoudou_oldtext = kyoudou.text
     signature_pattern = re.compile(
         r"(\d{4})年(\d{1,2})月(\d{1,2})日 \([月火水木金土日]\) (\d{2}):(\d{2}) \(UTC\)$",
-        re.M,
+        re.MULTILINE,
     )
     old_dict = collections.defaultdict(list)
     old_request_count = 0
@@ -126,10 +125,8 @@ def oldrequest(site, wait, show_diff):
         for request in field.get_sections(levels=(3,), include_lead=False):
             request_core = str(request).split("'''コメント'''", maxsplit=1)[0]
             for match in signature_pattern.finditer(request_core):
-                signature_datetime = datetime(
-                    *map(int, match.groups()), tzinfo=timezone.utc
-                )
-                now = datetime.now(timezone.utc)
+                signature_datetime = datetime(*map(int, match.groups()), tzinfo=UTC)
+                now = datetime.now(UTC)
                 if (now - signature_datetime) < timedelta(days=wait):
                     break
             else:
@@ -143,7 +140,7 @@ def oldrequest(site, wait, show_diff):
     # 古い依頼を転記する
     oldpage = pywikibot.Page(pywikibot.Site("ja", "wikipedia"), old_title)
     if not oldpage.exists():
-        pywikibot.error("{}が存在しません。".format(old_title))
+        pywikibot.error(f"{old_title}が存在しません。")
         return
     oldpage_oldtext = oldpage.text
     oldpage_code = mwparserfromhell.parse(oldpage.text)
@@ -159,20 +156,12 @@ def oldrequest(site, wait, show_diff):
     oldpage.text = re.sub(
         r"\[\[ */ *(.+?) *\]\]", r"[[Wikipedia:共同翻訳依頼/\1]]", oldpage.text
     )
-    summary2 = "Botによる: [[特別:固定リンク/{}|{}の{}時点の版]]から{}節転記".format(
-        kyoudou.latest_revision_id,
-        kyoudou_title,
-        iso8601toja(kyoudou.editTime()),
-        old_request_count,
-    )
+    summary2 = f"Botによる: [[特別:固定リンク/{kyoudou.latest_revision_id}|{kyoudou_title}の{iso8601toja(kyoudou.latest_revision.timestamp)}時点の版]]から{old_request_count}節転記"
     if show_diff:
         pywikibot.showDiff(oldpage_oldtext, oldpage.text)
     oldpage.save(summary=summary2, minor=False)
 
-    summary1 = "Botによる: [[{}]]へ{}節転記".format(
-        old_title,
-        old_request_count,
-    )
+    summary1 = f"Botによる: [[{old_title}]]へ{old_request_count}節転記"
     if show_diff:
         pywikibot.showDiff(kyoudou_oldtext, kyoudou.text)
         pywikibot.output(summary1)

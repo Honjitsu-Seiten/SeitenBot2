@@ -33,7 +33,7 @@ import pywikibot
 from mwparserfromhell.nodes.template import Template
 from mwparserfromhell.nodes.wikilink import Wikilink
 from mwparserfromhell.wikicode import Wikicode
-from pywikibot.bot import CurrentPageBot, SingleSiteBot
+from pywikibot.bot import ExistingPageBot, SingleSiteBot
 from pywikibot.data import api
 from pywikibot.exceptions import Error
 from pywikibot.pagegenerators import GeneratorFactory, PetScanPageGenerator
@@ -55,7 +55,11 @@ def get_seitenbot2_table2(wikicode: Wikicode):
     return result[0]
 
 
-class FileSdBot(SingleSiteBot, CurrentPageBot):
+class FileSdBot(SingleSiteBot, ExistingPageBot):
+    def __init__(self, **kwargs):
+        self.treat_page_type = pywikibot.FilePage
+        super().__init__(**kwargs)
+
     def setup(self):
         self.ignorelist = self.opt.get("ignorelist", False)
 
@@ -72,7 +76,8 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
             "NoticeOfExportation": "G",
             "OtherIssue": "Z",
         }
-        self.skipped = defaultdict(lambda: [set(), None])
+        self.skipped: defaultdict[pywikibot.page.BasePage, set] = defaultdict(set)
+        self.skipped_commons: dict[pywikibot.page.BasePage, pywikibot.FilePage] = {}
         self.commons_site = pywikibot.Site(code="commons", fam="commons")
         self.except_categories = (
             "自由利用できない画像屋外美術を含む画像",
@@ -185,7 +190,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
         try:
             self.current_page.text = self.current_page.get().replace("\u200e", "")
         except Error as e:
-            pywikibot.error(str(e))
+            pywikibot.exception(e)
             return
         commons_file_name = self.current_page.title(with_ns=False)
         wikicode = mwparserfromhell.parse(self.current_page.text)
@@ -209,7 +214,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
                         break
                 except ValueError:
                     pass
-        self.commons_page = pywikibot.FilePage(
+        self.commons_page: pywikibot.FilePage = pywikibot.FilePage(
             self.commons_site, title=commons_file_name, ignore_extension=True
         )
         pywikibot.output(
@@ -218,14 +223,15 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
         pywikibot.output(self.commons_page.title(with_ns=False))
         self._check()
         if self.current_page in self.skipped:
-            pywikibot.output("\n".join(self.skipped[self.current_page][0]))
+            skipped_reasons = self.skipped[self.current_page]
+            pywikibot.output("\n".join(skipped_reasons))
             if (
-                "NotUsedFileImporter" in self.skipped[self.current_page][0]
-                and "OtherIssue" not in self.skipped[self.current_page][0]
+                "NotUsedFileImporter" in skipped_reasons
+                and "OtherIssue" not in skipped_reasons
             ):
                 self._put_template()
             return
-        pywikibot.output(f"「{self.current_page.title(with_ns=True)}」を削除します")
+        pywikibot.output(f"{self.current_page}を削除します")
         delete_summary = f"Bot: [[WP:CSD#ファイル1-5]] [[c:{self.commons_page.title(with_ns=True)}]]へ移行"
         time.sleep(1)
         self.current_page.delete(
@@ -233,6 +239,8 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
         )
 
     def _check(self):
+
+        assert isinstance(self.current_page, pywikibot.FilePage)
 
         # インポートログ取得するために元のページを保存する
         importlog_target = self.commons_page
@@ -258,7 +266,9 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
 
         # コモンズのファイルがリダイレクトであれば、リダイレクトを辿る
         if self.commons_page.isRedirectPage():
-            self.commons_page = self.commons_page.getRedirectTarget()
+            self.commons_page = pywikibot.FilePage(
+                source=self.commons_page.getRedirectTarget(), ignore_extension=True
+            )
 
         time.sleep(1)
 
@@ -284,7 +294,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
                 self.import_log_timestamp = importlog.timestamp()
             else:
                 self._skip_delete("OtherIssue")
-                pywikibot.error("ログのフォーマットが異常です")
+                pywikibot.warning("ログのフォーマットが異常です")
                 return
         else:
             time.sleep(1)
@@ -341,7 +351,7 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
                     self.import_log_timestamp = info.timestamp
                     break
             else:
-                pywikibot.error("ファイルのハッシュ値が一致しません")
+                pywikibot.warning("ファイルのハッシュ値が一致しません")
                 self._skip_delete("OtherIssue")
                 return
 
@@ -420,9 +430,9 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
         return re.sub(r"\W+", "", str(code))
 
     def _skip_delete(self, reason):
-        self.skipped[self.current_page][0].add(reason)
+        self.skipped[self.current_page].add(reason)
         if getattr(self, "commons_page", None):
-            self.skipped[self.current_page][1] = self.commons_page
+            self.skipped_commons[self.current_page] = self.commons_page
 
     def _put_template(self):
         commons_code = mwparserfromhell.parse(self.commons_page.text)
@@ -438,7 +448,6 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
         except Error:
             self._skip_delete("OtherIssue")
             return False
-        newtext = self.commons_page.text
         code = commons_code
         for section in commons_code.get_sections(include_lead=False):
             if re.search(
@@ -454,23 +463,24 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
             commons_code.insert_before(categories[0], output_text)
         else:
             commons_code.insert_after(code, output_text)
-        newtext = str(commons_code)
-        summary = "Bot: Adding upload logs and histories of the original file on Japanese Wikipedia"
-        if not hasattr(self.site, "_noDeletePrompt"):
-            pywikibot.showDiff(self.commons_page.text, newtext, context=3)
-        self.commons_page.text = newtext
-        return self._save_page(
-            self.commons_page, self.commons_page.save, summary=summary, minor=False
+
+        return self.userPut(
+            self.commons_page,
+            self.commons_page.text,
+            str(commons_code),
+            summary="Bot: Adding upload logs and histories of the original file on Japanese Wikipedia",
+            minor=False,
         )
 
     def _make_template(self):
+        assert isinstance(self.current_page, pywikibot.FilePage)
         file_histories = self.current_page.get_file_history()
         infos = [file_histories[k] for k in sorted(file_histories.keys())]
         revisions = tuple(self.current_page.revisions(reverse=True))
         if len(infos) > 9:
-            raise pywikibot.Error("元のファイルの版数が多すぎます")
+            pywikibot.warning(f"{self.current_page}のファイルの版数が多すぎます")
         if len(revisions) > 19:
-            raise pywikibot.Error("元の編集履歴が多すぎます")
+            pywikibot.warning(f"{self.current_page}の編集履歴が多すぎます")
         output = ["{{Moved from Japanese Wikipedia"]
         output.append("| filename = " + self.current_page.title(with_ns=False))
         wikicode = mwparserfromhell.parse(self.description)
@@ -553,32 +563,33 @@ class FileSdBot(SingleSiteBot, CurrentPageBot):
             newtable2.write("| {{P|ファイル|")
             newtable2.write(page.title(with_ns=False))
             newtable2.write("}} ")
-            if value[1]:
-                if value[1].exists():
+            if page in self.skipped_commons:
+                commons_page = self.skipped_commons[page]
+                if commons_page.exists():
                     newtable2.write("| [[:c:")
-                    newtable2.write(value[1].title(with_ns=True))
+                    newtable2.write(commons_page.title(with_ns=True))
                     newtable2.write("|最新版]] ")
-                    oldest_revid = str(value[1].oldest_revision.revid)
+                    oldest_revid = str(commons_page.oldest_revision.revid)
                     newtable2.write("/ [[:c:Special:PermaLink/")
                     newtable2.write(oldest_revid)
                     newtable2.write("|初版]] / [[:c:Special:Diff/")
                     newtable2.write(oldest_revid)
                     newtable2.write("/cur|差分]] / {{Fullurl|n=c%3A")
-                    newtable2.write(value[1].title(with_ns=True, as_url=True))
+                    newtable2.write(commons_page.title(with_ns=True, as_url=True))
                     newtable2.write("|p=action=history|s=履歴|t=コモンズの履歴}} ")
                 else:
                     newtable2.write("| {{Fullurl|n=c%3ASpecial%3ALog|p=page=")
-                    newtable2.write(value[1].title(with_ns=True, as_url=True))
+                    newtable2.write(commons_page.title(with_ns=True, as_url=True))
                     newtable2.write("|s=ログ|t=コモンズの記録}} ")
                 newtable2.write(
                     "| Yes "
-                    if page.title(with_ns=False) == value[1].title(with_ns=False)
+                    if page.title(with_ns=False) == commons_page.title(with_ns=False)
                     else "| '''No''' "
                 )
             else:
                 newtable2.write("| | ")
             newtable2.write("| ")
-            reasons = sorted([self.skipped_reason[r] for r in value[0]])
+            reasons = sorted([self.skipped_reason[r] for r in value])
             newtable2.write(", ".join(f"[[#{x}|{x}]]" for x in reasons))
             newtable2.write("\n")
         newtable2.write("}}")
